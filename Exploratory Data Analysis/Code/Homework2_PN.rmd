@@ -1,0 +1,76 @@
+---
+title: "Homework2"
+author: "Prajwal Nagaraju"
+date: "January 25, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Read Data
+```{r}
+bike <- read.csv(file = "day.csv")
+library(dplyr)
+library(ggplot2)
+```
+
+#Create and upload a histogram of bike usage that is faceted by temperature, which you have turned
+#into a binary variable: above average (or equal to the average) and below average. Make sure that
+#"below average" is in the left column and "above average" is in the right. The way to do this is to
+#re-order the default (alphabetic) factor levels of your binary temperature variable.
+```{r}
+bike %>% 
+  mutate(temp_bin = ifelse(temp <= mean(temp), "below_avg_temp", "above_avg_temp")) %>%
+    ggplot(aes(cnt)) + geom_histogram() + facet_wrap(~factor(temp_bin ,levels = c("below_avg_temp" ,"above_avg_temp"))) +
+      ggtitle("histogram of Ridership by temperature") + labs(x = "Ridership" ,y = "Values")
+```
+
+#Create and upload a histogram of bike usage that is faceted by month and the binary temperature
+#variable: above average (or equal to the average) and below average. Month should be organized as
+#rows, temperature as columns. Again make sure that "below average" is in the left column and "above
+#average" is in the right.
+```{r}
+bike %>% mutate(temp_bin = ifelse(temp <= mean(temp), "below_avg_temp", "above_avg_temp")) %>%
+  ggplot(aes(cnt)) + geom_histogram() + facet_grid(mnth~factor(temp_bin ,levels = c("below_avg_temp" ,"above_avg_temp"))) +
+    ggtitle("histogram of Ridership by temperature and Month") + labs(x = "Ridership" ,y = "Values")
+```
+
+#Create and upload a similar plot-a histogram of bike usage that is faceted by month and a binary
+#temperature variable. This time, however, make sure that the binary temperature variable, above and
+#below average, is computed uniquely for each month. For example, the values of the binary temperature
+#variable for January should be above and below average for January. Again, make sure that "below
+#average" is in the left column and "above average" is in the right.
+```{r}
+bike %>%
+  group_by(mnth) %>%
+    mutate(temp_bin = ifelse(temp <= mean(temp), "below_avg_temp", "above_avg_temp")) %>%
+      ggplot(aes(cnt)) + geom_histogram() + facet_grid(mnth~factor(temp_bin ,levels = c("below_avg_temp" ,"above_avg_temp"))) +
+        ggtitle("histogram of Ridership by temperature grouped by Month") + labs(x = "Ridership" ,y = "Values")
+```
+
+#What are the 95% confidence intervals for the conditional mean of ridership in each season? Round
+#your answers to whole numbers.
+```{r}
+bike %>% 
+  group_by(season) %>%
+    summarise(mean_season = mean(cnt) ,sem_season = sd(cnt)/ sqrt(length(cnt)) ,CI1 = round(mean_season - sem_season * 1.96) ,CI2 = round(mean_season + sem_season * 1.96)) %>%
+      select(season ,CI1 ,CI2)
+```
+
+#Re-create the above plot exactly using your own dplyr and ggplot code.
+```{r}
+s <- bike %>%
+  group_by(mnth) %>%
+  mutate(monthly_temp = as.factor(ifelse(temp >= mean(temp), "Above average", "Below average")))
+
+s %>%
+  group_by(mnth, monthly_temp)%>%
+  summarise(mean_cnt = mean(cnt))%>%
+  ggplot(aes(x = factor(mnth), y = mean_cnt, group = monthly_temp, col = factor(monthly_temp, levels(monthly_temp)[c(2,1)]))) + scale_color_discrete(name = "monthly temp") + geom_line() +xlab("month") + ylab("ridership") +
+  ggtitle("Average Ridership by month and temperature")
+```
+
