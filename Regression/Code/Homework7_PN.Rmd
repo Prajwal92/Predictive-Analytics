@@ -1,0 +1,122 @@
+---
+title: "Homework7_PN"
+author: "Prajwal Nagaraju"
+date: "March 19, 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r}
+knitr::opts_chunk$set(echo = T,
+results='markup',
+warning = F,
+message =F)
+```
+
+
+```{r}
+library(caret)
+library(arm)
+library(MASS)
+
+setwd("C:/Users/prajw/Desktop/Stats n Pred Analytics/Assignments/Assignment 7")
+adult <- read.csv("adult.csv")
+
+adult$X <- NULL
+str(adult)
+summary(adult)
+
+pairs.panels(adult)
+#1)Which occupation is associated with the highest probability of having an income greater than 50k?
+prop.table(table(adult$occupation,adult$income))*100
+#Exec-managerial has the highest probability of having income greater than 50k
+
+#2)Fit a model with income as the outcome variable and age, education_num and sex as predictors. Which
+#of these variables has the largest effect size? Note: treat education_num as a continuous variable.
+summary(standardize(cmod <- glm(income ~ education_num +age + sex,  data=adult,family = binomial)))
+#It can be seen that education_num has the largest effect size
+
+#3)Does the effect of age on income vary with education level? Explain.
+invlogit(coef(cmod)[1]+coef(cmod)[2]*1+coef(cmod)[3] * mean(adult$age)) - invlogit(coef(cmod)[1]+coef(cmod)[2]*2+coef(cmod)[3]*mean(adult$age))
+#On varying the education level by 1 unit the probability changes very slightly as can be seen above
+invlogit(coef(cmod)[1]+coef(cmod)[2]*1+coef(cmod)[3] * mean(adult$age)) - invlogit(coef(cmod)[1]+coef(cmod)[2]*15+coef(cmod)[3]*mean(adult$age))
+#Now We varied the education level by a big margin so the changes in probability of income was also pretty significant.
+#So the amount of change in probability depends on the levels of change in education_num .If we change from education_num = 1 to 2 the difference is not significant but with large change in education_num from 1 to 15 the difference is pretty prominent.
+
+#4)Add an interaction between sex and education_num. Does this model fit the data better than the one
+#without the interaction? Briefly explain your answer.
+summary(cmod1 <- glm(income ~ age  + sex * education_num ,  data=adult,family = binomial))
+1 - pchisq(28718-28713 , df = 1)
+#0.025
+#We can see that the model cmod1 fits slightly better than cmod as can be seen using pchisq. 
+#0.025 is less than 0.05 and hence the difference is statistically significant. 
+
+#5)Interpret the interaction between sex and education_num.
+exp(coef(cmod1)[5])
+#0.9613 is the difference between the odds ratio corresponding to a change in education_level by 1  amongst males
+#and the the odds ratio corresponding to an increase in education_level by 1 amongst females.
+#or
+#0.9613 is also difference between the odds ratios for males vs. females 
+#in two homogenous groups which differ by 1 education_level 
+
+
+#6)Using the above model: what is the change in the probability of having an income greater than 50K for
+#women who are 40 years old with educational attainment of 10 compared to men who are 40 years old
+#with educational attainment of 10? Specifically, how much does the probability of the outcome change
+#for women?
+
+round(-invlogit(coef(cmod1)[1] + coef(cmod1)[2]*40 + coef(cmod1)[3]*0 + coef(cmod1)[4]*10 + coef(cmod1)[5]*10*0) +
+invlogit(coef(cmod1)[1] + coef(cmod1)[2]*40 + coef(cmod1)[3]*1 + coef(cmod1)[4]*10 + coef(cmod1)[5] *10*1),2)
+
+#7)Display and assess a binned residual plot of the above model.
+binnedplot(fitted(cmod1), residuals(cmod1))
+#It can be seen that at the lower levels of Expected Values there are many data points outside the CI which is a cause for concern.
+
+#Download the "pima" dataset from the folder for Homework 6 in Canvas. Impute missing observations using
+#the median of each variable.
+setwd("C:/Users/prajw/Desktop/Stats n Pred Analytics/Assignments/Assignment 7")
+pima <- read.csv("pima.csv")
+
+str(pima)
+pima$X <- NULL
+
+#Imputing the missing values with median 
+medimp <- predict(preProcess(pima, method=c("medianImpute")), pima)
+str(medimp)
+
+#8)Fit a model that predicts type using npreg, ped, glu, bmi, ped, age and an interaction between npreg
+#and ped. Use .5 as your threshold for converting predicted probabilities into the scale of the outcome
+#(greater than .5 should equal 1, less than or equal to .5 should equal 0). What is the accuracy of these
+#predictions? Round your answer to 2 decimals.
+
+summary(pmod <- glm(type ~ npreg + ped + glu + bmi + ped + age + npreg*ped, data=medimp,family = binomial))
+
+confusionMatrix(ifelse(predict(pmod, newdata=medimp, type="response") >.5 ,"Yes","No"),
+                medimp$type)
+
+#9)What is the AUC of this model?
+library(pROC)
+
+roc(medimp$type, predict(pmod, newdata=medimp, type="response"), plot=F)
+#0.831
+
+#11)Extra credit. Suppose that a non-profit health organization wanted to use your model to predict diabetes
+#in this population, but they wanted to do so very conservatively. That is, they aren't worried about
+#overpredicting diabetes. (At the worst, they reason, it would be an inconvenience for patients to come
+#in to get tested.) Instead, they want to avoid underpredicting diabetes. Specifically, they would like to
+#push the number of false negatives (instances where the model predicts incorrectly that a person does
+#not have diabetes) down to no more than 5% of the population. That is, if the population were 1000,
+#they would want there to be no more than 50 false negatives. How would you accomplish this task? Be
+#specific.
+
+confusionMatrix(ifelse(predict(pmod, newdata=medimp, type="response") >.21 ,"Yes","No"),
+                medimp$type)
+
+#In order to push down the number of false negatives to less than 5% of the total population 
+#we should change the decision threshold to 0.21 or lesser as can be seen in the above code .
+#By setting decision threshold to 0.21 the number of false negatives has been driven down to 24 ,
+#down from 82 , which is less than 5% of the total population.2
+```
+

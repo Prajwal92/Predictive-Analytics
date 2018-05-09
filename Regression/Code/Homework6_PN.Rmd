@@ -1,0 +1,210 @@
+---
+title: "Homework6_PN"
+author: "Prajwal Nagaraju"
+date: "March 5, 2017"
+output: pdf_document
+---
+
+
+#To turn off messages and warnings and print
+#code appropriately:
+```{r}
+knitr::opts_chunk$set(echo = T,
+results='markup',
+warning = F,
+message =F)
+```
+
+#Setup ,data transformation and imputation
+```{r}
+library(ggplot2)
+library(caret)
+library(arm)
+library(dplyr)
+library(MASS)
+library(missForest)
+setwd("C:/Users/prajw/Desktop/Stats n Pred Analytics/Assignments/Assignment 6")
+
+college <- read.csv(file = "college.csv", stringsAsFactors = FALSE)
+str(college)
+summary(college)
+
+head(college)
+
+college$X <- factor(college$X)
+college$Private <- factor(college$Private)
+
+college <- college[,-1]
+#Missing data imputation using missForest
+set.seed(3917)
+college <- missForest(college)
+college <- college$ximp
+head(college)
+summary(college)
+
+#Split the imputed dataset into a train set and a test set, again using 
+#set.seed(3917), with 70% of the observations in train and 30% in test.
+set.seed(3917)
+rows <- sample(nrow(college), .7*nrow(college))
+tr <- college[rows, ]
+te <- college[-rows, ]
+```
+
+#Fit a Lasso regression model of Apps (the number of applications a college receives) using all the
+#predictor variables in the train set you created. Search for the optimal lambda by increments of .1
+#between 0 and 10. Use that model to predict Apps in the test set. Report test set RMSE.
+```{r}
+
+lasso_mod <- train(Apps ~ ., 
+                   data = tr,
+                   preProcess = c("center", "scale"),
+                   method = "glmnet",
+                   tuneGrid= expand.grid(
+                     alpha=1,
+                     lambda = seq(0,10, .1)))
+
+rmse <- function(actual, pred) sqrt(mean((actual-pred)^2))
+rmse(te$Apps, predict(lasso_mod, newdata=te))
+
+```
+
+#Fit a ridge regression model of Apps using all the predictor variables in the train set you created. Search
+#for the optimal lambda by increments of .1 between 0 and 10. Use that model to predict Apps in the
+#test set. Report test set RMSE.
+```{r}
+ridge_mod <- train(Apps ~ ., 
+                   data = tr,
+                   preProcess = c("center", "scale"),
+                   method = "glmnet",
+                   tuneGrid= expand.grid(
+                     alpha=0,
+                     lambda = seq(0,10, .1)))
+
+rmse(te$Apps, predict(ridge_mod, newdata=te))
+
+```
+
+#Fit a linear model (OLS) of Apps using all the predictor variables in the train set you created. Use that
+#model to predict Apps in the test set. Report test set RMSE.
+```{r}
+lm_mod <- train(Apps ~ ., 
+                data = tr,
+                preProcess = c("center", "scale"),
+                method = "lm")
+
+rmse(te$Apps, predict(lm_mod, newdata=te))
+```
+
+#Using the results from the linear model, identify which predictor has the strongest relationship with
+#Apps.
+```{r}
+coef(lm_mod$finalModel)
+```
+Accept is the strongest predictor for Apps
+
+#Using the imputed Pima dataset, fit a model that predicts type using npreg, bmi, ped, age, and glu.
+#Does this model fit the data better than the model with all the predictors? Briefly explain your answer.
+```{r}
+pima <- read.csv(file = "pima.csv", stringsAsFactors = FALSE)
+
+str(pima)
+summary(pima)
+
+pima$type <- factor(pima$type)
+
+#imputation using caret package
+pima <- pima[,-1]
+medimp <- predict(preProcess(pima, method=c("medianImpute")), pima)
+
+str(medimp)
+summary(medimp)
+
+#comparing two models
+summary(cmod <- train(type ~ npreg+bmi+ped+age+glu, data=medimp, method="glm"))
+summary(cmod_all <- train(type ~ ., data=medimp, method="glm"))
+
+#Alternate way
+m1 <- glm(type ~ npreg+bmi+ped+age+glu, data=medimp, family=binomial)
+summary(m1)
+
+m2<- glm(type ~ ., data=medimp, family=binomial)
+summary(m2)
+
+```
+m2 with all the predictors is a slightly better than m1 since it has a better AIC (509.79) 
+than model 1 (512.66) and lesser residual deviance . 
+
+#Turn age into a categorical predictor by binning it into quartiles. The easiest way to do this is to use
+#the quantile() function as an argument within the cut() function. Be sure to use include.lowest = T
+#as an argument to cut(). Now replace age in the above model with the categorical age variable you
+#created. Center and scale (dividing by 2 standard deviations) the predictors in the model. Report the
+#residual deviance
+```{r}
+
+medimp$age_cat <- cut(medimp$age, quantile(medimp$age), include.lowest = T)
+levels(medimp$age_cat)
+
+m3 <- standardize(glm(type ~ npreg+bmi+ped+age_cat+glu, data=medimp, family=binomial))
+
+summary(m3)
+```
+
+#Interpret the coefficients for the categorical age variable in the above model as log odds. (You should
+#be interpreting 4 coefficients.)
+```{r}
+(coef(m3)[1])
+(coef(m3)[5])
+(coef(m3)[6])
+(coef(m3)[7])
+
+```
+The log odds of having diabetes is -1.46 when all the predictors are at their average(or zero).
+
+When the categorical age variable changes from the reference level to age_cat(25,27],it is 
+associated with a 0.6563608 increase in log odds of diabetes
+
+When the categorical age variable changes from the reference level to age_cat(27,32] 
+it is associated with a 0.4414095 increase in log odds of diabetes.
+
+When the categorical age variable changes from the reference level to age_cat(32,65] 
+it is associated with a 1.018597 increase in log odds of diabetes.
+
+#Interpret the coefficients for the categorical age variable in the above model in terms of probabilities,
+#when all the other variables are at their means.
+```{r}
+
+invlogit(coef(m3)[1])
+invlogit(coef(m3)[5])
+invlogit(coef(m3)[6])
+invlogit(coef(m3)[7])
+```
+The probability of diabetes is 0.187(18.7%) when all the predictors are at their mean
+
+When the categorical age variable changes from the reference level to age_cat(25,27] 
+the probabilty of having diabetes is 0.656(65.6%) with all other variables are at their mean
+
+When the categorical age variable changes from the reference level to age_cat(27,32] 
+the probabilty of having diabetes is 0.6085(60.85%) with all other variables are at their mean
+
+When the categorical age variable changes from the reference level to age_cat(32,65] 
+the probabilty of having diabetes is 0.734(73.4%) with all other variables are at their mean
+
+#Interpret the coefficients for the categorical age variable in the above model as odds ratios. In this
+#case, you should interpret only 3 coefficients; do not include the intercept. The intercept cannot be
+#interpreted in terms of an odds ratio, since the exponentiated intercept is defined as the odds of the event: p
+#1???p , where p is Pr(y = Yes|X).
+```{r}
+m3_uc <- glm(type ~ npreg+bmi+ped+age_cat+glu, data=medimp, family=binomial)
+
+exp(coef(m3_uc)[5])
+exp(coef(m3_uc)[6])
+exp(coef(m3_uc)[7])
+```
+Increasing the categorical age variable from the reference factor to age_cat(25,27] 
+increases the odds of having diabetes by 92%
+
+Increasing the categorical age variable from the reference factor to age_cat(27,32] 
+increases the odds of having diabetes by 55%
+
+Increasing the categorical age variable from the reference factor to age_cat(32,65] 
+increases the odds of having diabetes by 176% (almost doubles it)
