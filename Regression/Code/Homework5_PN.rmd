@@ -1,0 +1,182 @@
+---
+title: "Homework 5"
+author: "Prajwal Nagaraju"
+date: "February 11, 2017"
+output: pdf_document
+---
+
+#To turn off messages and warnings and print
+#code appropriately:
+```{r}
+knitr::opts_chunk$set(echo = T,
+results='markup',
+warning = F,
+message =F)
+```
+
+
+#Set up and data import
+```{r}
+library(ggplot2)
+library(MASS)
+library(caret)
+library(arm)
+
+#combine the two Pima datasets together: new_data <- rbind(Pima.te, Pima.tr).
+new_data <- rbind(Pima.te, Pima.tr)
+#View the structure of data
+str(new_data)
+```
+
+##Question 1:Fit a model of bp using all 7 variables (524 degrees of freedom or df). 
+##Report the RMSE of this model.
+```{r}
+pima_lm <- lm(bp ~ .,data = new_data)
+display(pima_lm)
+summary(pima_lm)
+
+#Function to compute RMSE
+rmse <- function(yhat, y) {
+  sqrt((mean((yhat - y)^2)))
+}
+
+#Make a function call to rmse with 2 arguments
+rmse(new_data$bp, predict(pima_lm))
+#RMSE Value
+```
+
+##Question 2: Which variable is the strongest 
+##predictor, negative or positive, of bp?
+```{r}
+#Rescale all the variables so that their coeffecients can be
+#compared on a similar scale
+display(lm(bp ~ rescale(npreg) + rescale(glu) + rescale(skin) + 
+             rescale(bmi) + rescale(ped) + 
+             rescale(age) + rescale(type), data= new_data))
+
+```
+Age is the strongest predictor because it has the largest absolute value for the standardized coefficient.
+
+#Question 3:There is a significant interaction between glu and age in predicting bp. Create two plots that visualize
+#this interaction. Summarize the fits you are displaying using least squares lines, without standard errors
+
+```{r}
+#Convert the continuous variables age and glu to binary
+new_data$glu_bin <- factor(ifelse(new_data$glu > mean(new_data$glu), 1, 0))
+new_data$age_bin <- factor(ifelse(new_data$age > mean(new_data$age), 1, 0))
+
+#The two plots that visualise this interaction
+#Plot 1
+ggplot(data = new_data, aes(x = glu, y = bp, col = age_bin)) + 
+  geom_point() + 
+    stat_smooth(method = "lm", se = F) +
+      ggtitle("bp ~ age varying by glu")
+
+#Plot 2
+ggplot(data = new_data, aes(x = age, y = bp, col = glu_bin)) + 
+  geom_point() + 
+    stat_smooth(method = "lm", se = F) +
+      ggtitle("bp ~ glu varying by age")
+
+```
+
+
+##Question 4. In the model of bp that includes the interaction (523 df), report and interpret:
+##1. the coefficient for the interaction term (glu x age),
+##2. the coefficient for glu, and
+##3. the coefficient for age.
+```{r}
+#Model with interaction term for glu and age
+pima_lm_2 <- lm(bp ~ rescale(npreg) + rescale(skin)  + rescale(bmi) + rescale(ped) + 
+                  rescale(type) + rescale(glu) * rescale(age) ,data = new_data)
+summary(pima_lm_2)
+```
+1)The coeffecient for the interaction term : -4.0356
+INTERPRETATION : -4.0356 is added to the slope of glu(2.4626) for each additional unit of age(2 standard deviations)
+      Alternately,-4.0356 is added to the slope of age(8.7408) for each additional unit of glu(2 standard deviations)
+
+2)the coefficient for glu : 2.4626
+INTEPRETATION : 2.4626 is the average increase in BP if glu goes up by 2 standard deviations when age is average(= 0) 
+
+3)The coeffecient for age : 8.7408
+INTERPRETATION : 8.7408 is the average increase in BP if age goes up by 2 standard deviations when glu is average(= 0) 
+
+##Question 5 :Now add a quadratic term to the above model for bmi (you should have 522 df in this model). Is there
+##a statistically significant difference between the model with bmi2 (522 df) and the model without (523df)?
+
+```{r}
+#Create a variable bmi_2 for quadratic term
+new_data$bmi2 <- new_data$bmi * new_data$bmi
+
+#Fit a model with quadratic term(522 DF)
+pima_lm_3 <- lm(bp ~ rescale(npreg) + rescale(skin)  + rescale(bmi) +
+                  rescale(bmi2) + rescale(ped) + type + glu*age ,data = new_data)
+summary(pima_lm_3)
+
+anova(pima_lm_2,pima_lm_3)
+```
+There is no significant reduction in RSS for the 2 models ,so we can say that there is no s
+tatistically significant difference between the model with bmi2 (522 df) and the model without (523df).
+
+##Use the stepAIC function from the MASS package to automatically select variables from the model you
+##used in questions 3 and 4 (523 df). Is this stepAIC model a better model than that one? Explain your
+##answer using evidence from RMSE, R2, AIC and the Likelihood Ratio Test (LRT).
+```{r}
+summary(stepAIC(pima_lm_2 ,direction = "both"))
+stepAIC_lm <- lm(bp ~ rescale(bmi) + rescale(ped)  + rescale(age) + 
+                   rescale(glu) + rescale(age) * rescale(glu) ,data=new_data)
+
+#Compare using AIC
+
+#AIC for stepAIC model
+AIC(stepAIC_lm)
+
+#AIC for the model in questions 3 and 4 (523 df)
+AIC(pima_lm_2)
+# We can see that the model used in Question 3 and 4 is better
+# as its AIC value is better than stepAIC model
+
+# Compare RMSE 
+rmse(predict(stepAIC_lm), new_data$bp)
+rmse(predict(pima_lm_2), new_data$bp)
+
+#RMSE is lower for model in Q3 and Q4 
+
+#Compare R2
+R2 <- function(y, yhat, ybar) {
+1 - sum((y - yhat)^2)/sum((y - ybar)^2)
+}
+
+R2(new_data$bp,predict(stepAIC_lm),mean(new_data$bp))
+R2(new_data$bp,predict(pima_lm_2),mean(new_data$bp))
+
+#R2 is better for model in Q3 and Q4
+
+#Comparing RMSE and R2 for two models we can see that the model in Q3 and Q4 
+#is better than stepAIC model
+
+#LRT method
+
+#For stepAIC model
+anova(stepAIC_lm ,pima_lm_2)
+
+#Comparing using LRT also suggests that the model in Q3 and Q4 is better than stepAIC model
+```
+
+##Fit a KNN model of bp using all the variables but without any interaction or quadratic terms. Please
+##make sure that you are using a model with k = 9. Report RMSE.
+```{r}
+(knn_model <- train(bp ~ .,
+preProcess = c("center","scale"), #have to center and scale for KNN
+method="knn",
+data =new_data))
+
+rmse <- function(yhat, y) {
+  sqrt((mean((yhat - y)^2)))
+}
+
+
+rmse(new_data$bp, predict(knn_model))
+#RMSE value
+```
+

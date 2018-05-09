@@ -1,0 +1,113 @@
+---
+title: "Homework 4"
+author: "Prajwal Nagaraju"
+date: "February 5, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+##Question-1:Generate two vectors of 1000 random numbers, x and y, using set.seed(204) with the rnorm() function. The standard deviation of both vectors should be 5. Stipulate the mean of x to be 100 and the mean of y to be 101. If you select the top n observations in each vector, at what value of n does a t.test discern a statistically significant difference in means between the two distributions? Use the default settings for R's implementation of the t-test: alternative = "two-sided"; paired = F; var.equal = F.
+```{r}
+library(caret)
+library(arm)
+library(dplyr)
+library(ggplot2)
+
+#Reading data from source file
+setwd("~/Desktop")
+bike <- read.csv("day.csv")
+str(bike)
+#Generating 2  vectors of 1000 random numbers, x and y
+set.seed(204)
+x <- rnorm(1000, mean = 100, sd = 5)
+y <- rnorm(1000, mean = 101, sd = 5)
+
+p <-0
+p_value <- 1
+n <- 0
+i <- 2
+while(p_value > 0.05 & i <=1000){
+ p <- t.test(head(x,i),head(y,i)) 
+ p_value <- p$p.value
+ n <- i 
+ i <- i+1
+}
+n
+p_value
+```
+
+##Question-2:What is the value of the t-statistic for the t-test comparing x[1:n] and y[1:n], using the number you reported above as n?
+```{r}
+p$statistic
+```
+
+##Question-3:What is the critical value of t for two-tails and degrees of freedom = 2 * n - 2
+```{r}
+qt(.025, df=(2 * n-2))
+```
+##Question-4:Fit a linear model of bike ridership (cnt) using all the variables except instant, dteday, weekday, atemp, casual and registered. Do not transform any of the variables aside from treating integer coded variables,  when appropriate, as factors. You should have 708 degrees of freedom for this model (df = n - p, where n is the number of observations and p is the number of parameters). Report the RMSE for this model.
+```{r}
+lm_model <- lm(cnt ~ factor(season)+factor(yr)+factor(mnth)+holiday+workingday+factor(weathersit)+temp+hum+windspeed, data= bike)
+coef(lm_model)
+display(lm_model)
+summary(lm_model)
+
+rmse <- function(yhat, y) {
+  sqrt((mean((yhat - y)^2)))
+}
+
+lm_rmse <- rmse(y = bike$cnt,yhat = predict(lm_model))
+lm_rmse
+```
+
+##Question-5: Display and interpret the residual plot (fitted vs. residuals) for the above model. What do you see? How well does this model the data?
+```{r}
+plot(lm_model)
+```
+It can be seen that for higher values of the fitted values (explanatory variables),the residuals are higher.Hence we can say that this is not a good model fit.
+
+##Question-6:What is the value of the intercept coefficient in the above model?
+
+```{r}
+lm_model$coefficients[1]
+```
+
+##Question-7 :Interpret the meaning of the intercept coefficient.
+
+The intercept (often labeled the constant) is the expected mean value of Y when all X=0.If X never = 0, then the intercept has no intrinsic meaning.
+In our case ,the value of Intercept coeffecient is 1805.96 .
+This suggests that the count of bike ridership is 1805.96 when all the other explanatory variables are zero.
+However in real world there cannot be a case where all the explanatory variables are zero so the value of an intercept coeffecient is not significant.
+
+##Question-8:Add an interaction to the above model between workingday and temp. Make a plot that visualizes the interaction.
+```{r}
+lm_model_int <- lm(cnt ~ factor(season)+ factor(yr)+factor(mnth)+holiday+factor(weathersit)+temp * workingday +hum+windspeed, data= bike)
+display(lm_model_int)
+summary(lm_model_int)
+
+ggplot(lm_model_int, aes(temp, cnt, col=factor(workingday))) + 
+  geom_point() + stat_smooth(method="lm" ,se = F) + ggtitle("Plot of Ridership as a function of interaction between Temperature and Working Day") + xlab("Temperature") + ylab("Ridership")
+```
+
+##Question 9 -Interpret the coefficient for the interaction.
+The interaction value is -952.93.
+The interaction between Temperature and Working day has a massive effect .
+Due to the interaction the effect of temperature on the ridership is different for working days and non-working days.
+In other words we can say that due to the interaction ,the combined effect of temperature and working day has a different effect on ridership than if we were to consider 
+the effect on ridership had we considered the two explanatory variables seperately.
+In terms of regression line we can say that the difference in slope of the lines of cnt v/s temperature for working day = 0 and 1 would be -952.93.
+
+##Question-10:Using the above model with the interaction (707 df), predict ridership for a typical day in July: non-holiday, yr = 2012, weekday, good weather ("clear"), and average temperature, humidity and windspeed (average for July).
+```{r}
+coef(lm_model_int)
+
+bike %>%
+ group_by(mnth,yr) %>%
+    filter(mnth == 7 & yr == 1) %>%
+      summarise(mean_july_temp = mean(temp) ,mean_july_hum = mean(hum) ,mean_july_windspeed = mean(windspeed) ,
+                result = coef(lm_model_int)[1] + coef(lm_model_int)[3] + coef(lm_model_int)[5] + coef(lm_model_int)[11] + coef(lm_model_int)[21] + coef(lm_model_int)[20] * mean_july_temp + coef(lm_model_int)[22] * mean_july_hum + coef(lm_model_int)[23] * mean_july_windspeed + coef(lm_model_int)[24] * mean_july_temp * 1) %>%
+                  select(result)
+                
+```
+
